@@ -1,9 +1,9 @@
-#                      _                        
-#  _   _  ___  _   _  | | ___ __   _____      __
-# | | | |/ _ \| | | | | |/ /  _ \ / _ \ \ /\ / /
-# | |_| | (_) | |_| |_|   <| | | | (_) \ V  V / 
-#  \__, |\___/ \__,_(_)_|\_\_| |_|\___/ \_/\_/  
-#  |___/                                        
+#                    _                    
+#   _   _  ___  _   _  | | ___ __   _____   __
+#  | | | |/ _ \| | | | | |/ /  _ \ / _ \ \ /\ / /
+#  | |_| | (_) | |_| |_|    <| | | | (_) \ V  V / 
+#   \__, |\___/ \__,_(_)_|\_\_| |_|\___/ \_/\_/  
+#   |___/                                        
 
 [CmdletBinding()]
 param(
@@ -91,7 +91,8 @@ try {
 } catch {}
 
 # Cleanup[cite: 1]
-$fileStream.Close()$fileStream.Dispose()
+$fileStream.Close()
+$fileStream.Dispose()
 
 Set-Location C:\Users\Public\Documents
 Remove-Item -Recurse -Force scripts
