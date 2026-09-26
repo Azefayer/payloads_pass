@@ -70,12 +70,19 @@ if ((Test-Path $localStatePath) -and (Test-Path $loginDataPath)) {
         $textContent = [System.Text.Encoding]::ISO_Latin1.GetString($dbBytes)
 
         $urls = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
-        if ($urls -and $urls.Count -gt 0) {
-            $uniqueUrls = $urls | ForEach-Object { $_.Value } | Select-Object -Unique
-            foreach ($u in $uniqueUrls) {
-                if ($u -and $u -notmatch "google|gstatic|googleapis|apple|mozilla|microsoft|w3") {
-                    Add-Content -Path $outputPath -Value "--------------------------------------------------"
-                    Add-Content -Path $outputPath -Value "URL : $u"
+        
+        if ($urls) {
+            $seen = @()
+            foreach ($match in $urls) {
+                if ($match -and $match.Value) {
+                    $u = $match.Value
+                    if ($seen -notcontains $u) {
+                        $seen += $u
+                        if ($u -notmatch "google|gstatic|googleapis|apple|mozilla|microsoft|w3") {
+                            Add-Content -Path $outputPath -Value "--------------------------------------------------"
+                            Add-Content -Path $outputPath -Value "URL : $u"
+                        }
+                    }
                 }
             }
         } else {
