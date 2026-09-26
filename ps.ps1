@@ -62,10 +62,16 @@ if (Test-Path $tempDb) {
     $dbBytes = [System.IO.File]::ReadAllBytes($tempDb)
     $textContent = [System.Text.Encoding]::UTF8.GetString($dbBytes)
 
-    $urls = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
-    foreach ($u in $urls | Select-Object -Unique) {
-        if ($u.Value -notmatch "google|gstatic|googleapis|apple|mozilla") {
-            Add-Content -Path $outputPath -Value "URL: $($u.Value)"
+    $matches = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
+    
+    $cleanList = @()
+    foreach ($m in $matches) {
+        if ($m.Value -notmatch "google|gstatic|googleapis|apple|mozilla|microsoft") {
+            if ($cleanList -notcontains $m.Value) {
+                $cleanList += $m.Value
+                Add-Content -Path $outputPath -Value "--------------------------------------------------"
+                Add-Content -Path $outputPath -Value "URL : $($m.Value)"
+            }
         }
     }
 
