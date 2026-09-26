@@ -98,7 +98,8 @@ try {
 }
 
 if ($fileStream) {
-    $fileStream.Close()$fileStream.Dispose()
+    $fileStream.Close()
+    $fileStream.Dispose()
 }
 
 # Nettoyage final sécurisé
