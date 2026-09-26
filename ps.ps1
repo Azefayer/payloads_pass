@@ -70,7 +70,7 @@ if (Test-Path $loginDataPath) {
             }
         
 
-        Remove-Item $tempDb -Force -ErrorAction SilentlyContinue
+       Remove-Item $tempDb -Force -ErrorAction SilentlyContinue
     } catch {
         Add-Content -Path $outputPath -Value "[!] Erreur lors de l'extraction native : $_"
     }
