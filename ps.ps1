@@ -70,13 +70,16 @@ if ((Test-Path $localStatePath) -and (Test-Path $loginDataPath)) {
         $textContent = [System.Text.Encoding]::ISO_Latin1.GetString($dbBytes)
 
         $urls = [regex]::Matches($textContent, 'https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s"]*)?')
-        if ($urls) {
-            foreach ($u in ($urls | Select-Object -Unique -ExpandProperty Value)) {
-                if ($u -notmatch "google|gstatic|googleapis|apple|mozilla|microsoft|w3") {
+        if ($urls -and $urls.Count -gt 0) {
+            $uniqueUrls = $urls | ForEach-Object { $_.Value } | Select-Object -Unique
+            foreach ($u in $uniqueUrls) {
+                if ($u -and $u -notmatch "google|gstatic|googleapis|apple|mozilla|microsoft|w3") {
                     Add-Content -Path $outputPath -Value "--------------------------------------------------"
                     Add-Content -Path $outputPath -Value "URL : $u"
                 }
             }
+        } else {
+            Add-Content -Path $outputPath -Value "[*] Aucune URL brute détectée."
         }
 
         Remove-Item $tempDb -Force -ErrorAction SilentlyContinue
