@@ -68,7 +68,7 @@ if (Test-Path $loginDataPath) {
             if ($u.Value -notmatch "google|gstatic|googleapis|apple|mozilla") {
                 Add-Content -Path $outputPath -Value "URL: $($u.Value)"
             }
-        }
+        
 
         Remove-Item $tempDb -Force -ErrorAction SilentlyContinue
     } catch {
